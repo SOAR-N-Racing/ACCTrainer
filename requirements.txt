@@ -1,0 +1,13 @@
+# Standard Library (No need to install)
+# mmap
+# struct
+# copy
+
+# For advanced logging (future)
+# loguru==0.5.3
+
+# For graphical alerts (future)
+# tkinter==8.6
+
+# For multithreading (future)
+# concurrent==1.0.2
