@@ -1,14 +1,79 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QProgressBar, QSlider
+from __future__ import annotations
+
+import logging
+import time
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QProgressBar, QSlider, QMainWindow
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPalette, QColor, QFontDatabase
-import random
+from ..modules.Telemetry import TelemetryRT
 import sys
+import matplotlib
+import matplotlib.animation as animation
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
+#style.use("dark_background")
+
+log = logging.getLogger(__name__)
+
 
 class DriverInputs(QWidget):
     def __init__(self):
         super(DriverInputs, self).__init__()
 
+        self.time_axis = []
+        self.gas_data = []
+        self.brake_data = []
+
+        self.gas_20s = []
+        self.brake_20s = []
+        self.time_20s = []
         self.layout = QVBoxLayout()
+
+        self.figure = Figure()
+        self.figure.get_figure = Figure(figsize=(6.5, 4.5), dpi=100)
+        self.figure.subplots_adjust(left=0.125,
+                                    bottom=0.1,
+                                    right=0.9,
+                                    top=0.9,
+                                    wspace=0.2,
+                                    hspace=0.7)
+        
+        self.gas_graph = self.figure.add_subplot(2, 1, 1)
+        self.brake_graph = self.figure.add_subplot(2, 1, 2)
+
+        self.start_lap_time = 0
+
+        self.gas_line,  = self.gas_graph.plot(
+            self.time_20s, self.gas_20s,
+            "#00FF00",
+            label="Gas")
+
+        self.brake_line,  = self.brake_graph.plot(
+            self.time_20s, self.brake_20s,
+            "#FF0000",
+            label="Brake")
+
+        self.gas_graph.set_title("Throttle input over time")
+        self.gas_graph.set_xlabel("Time (Seconds)")
+        self.gas_graph.set_ylabel("Throttle (%)")
+        self.gas_graph.set_xlim(0, 1)
+        self.gas_graph.set_ylim(-5, 105)
+
+        self.brake_graph.set_title("Brake input over time")
+        self.brake_graph.set_xlabel("Time (Seconds)")
+        self.brake_graph.set_ylabel("Brake (%)")
+        self.brake_graph.set_xlim(0, 1)
+        self.brake_graph.set_ylim(-5, 105)
+
+        self.gas_graph.set_xlim(10, 0)
+        self.brake_graph.set_xlim(10, 0)
+
+        self.canvas = FigureCanvas(self.figure, self)
+        self.ani = animation.FuncAnimation(self.figure, self._animate,
+                                           interval=100, blit=False)
+        self.ani.event_source.stop()
+        self.layout.addWidget(self.ani)
 
         # Styling
         palette = QPalette()
@@ -116,19 +181,40 @@ class DriverInputs(QWidget):
         self.timer.timeout.connect(self.update_values)
         self.timer.start(100)  # Update every 100ms
 
+    def _animate(self, i) -> None:
+
+        if len(self.time_axis) == 0:
+            return
+
+        self.gas_line.set_data(self.time_20s, self.gas_20s)
+        self.brake_line.set_data(self.time_20s, self.brake_20s)
+
+    def reset(self) -> None:
+
+        self.time_axis.clear()
+        self.gas_data.clear()
+        self.brake_data.clear()
+        self.start_lap_time = 0
+
+    def stop_animation(self) -> None:
+        self.ani.event_source.stop()
+
+    def start_animation(self) -> None:
+        self.ani.event_source.start()
+
     def update_values(self):
-        gas_value = random.randint(0, 100)
-        brake_value = random.randint(0, 100)
-        steering_value = random.randint(-100, 100)
-        gear_value = random.randint(1, 6)
-        speed_value = random.randint(0, 200)
+
+        gas_value = TelemetryRT.gas.as_integer_ratio(0, 100)
+        brake_value = TelemetryRT.brake.as_integer_ratio(0, 100)
+        steering_value = TelemetryRT.streering_angle.as_integer_ratio(-100, 100)
+        gear_value = TelemetryRT.gear.as_integer_ratio(1, 6)
+        speed_value = TelemetryRT.speed.as_integer_ratio(0, 200)
 
         self.gas_progress.setValue(gas_value)
         self.brake_progress.setValue(brake_value)
         self.steering_slider.setValue(steering_value)
         self.gear_label.setText(f"Gear: {gear_value}")
         self.speed_label.setText(f"Speed: {speed_value} KPH")
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     # font_database = QFontDatabase()

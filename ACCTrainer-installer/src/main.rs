@@ -3,7 +3,7 @@ use std::process::{exit, Command};
 
 use semver::{Version, VersionReq};
 
-#[derive(Debug, Clone)]
+[derive(Debug, Clone)]
 struct PythonError;
 
 impl std::error::Error for PythonError {}
