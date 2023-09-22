@@ -9,13 +9,18 @@ from typing import Any, List, Optional
 import logging
 from io import BufferedWriter
 import threading
+import tkinter as tk
+from tkinter import ttk
+import time
 
 logging.basicConfig(filename='acc_data.log', level=logging.INFO)
 formatter = logging.Formatter('%(asctime)s.%(msecs)03d %(message)s', datefmt='%Y-%m-%d,%H:%M:%S')
 handler = logging.FileHandler('acc_data.log')
 handler.setFormatter(formatter)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.addHandler(handler)
+
+_VERSION_ = "0.0.1"
 
 class SharedMemoryError(Exception):
     pass
@@ -470,6 +475,33 @@ class ACC_map:
     Graphics: GraphicsMap
     Static: StaticsMap
 
+class FuelMonitor:
+    def __init__(self, master):
+        self.master = master
+        master.title("Fuel Monitor")
+
+        self.label = tk.Label(master, text="Fuel Level:")
+        self.label.pack()
+
+        self.fuel_level = tk.StringVar()
+        self.fuel_label = ttk.Label(master, textvariable=self.fuel_level)
+        self.fuel_label.pack()
+
+        self.close_button = tk.Button(master, text="Close", command=master.quit)
+        self.close_button.pack()
+
+    def update_fuel(self, fuel):
+        self.fuel_level.set(f"Current Fuel: {fuel}")
+
+        if fuel > 90.0:
+            logger.info(f"Fuel Tank Level Full: {fuel}")
+            self.fuel_label.config(background='green')
+        elif fuel < 90 and fuel > 50:
+            logger.info(f"Fuel Tank Level Half: {fuel}")
+            self.fuel_label.config(background='yellow')
+        elif fuel < 50 and fuel > 0:
+            logger.info(f"Fuel Tank Level Low: {fuel}")
+            self.fuel_label.config(background='red')
 
 class accSM(mmap.mmap):
 
@@ -1005,17 +1037,22 @@ def penalty_workarround(graphic_map: accSM) -> ACC_PENALTY_TYPE:
     except(ValueError):
         return ACC_PENALTY_TYPE.UnknownValue
 
-def log_data(sm):
+def log_telemetry_data():
     # Logging the required data
-    logger.info(f"Physics: Pad life: {sm.Physics.pad_life} | "
-                #f"Graphics: Strategy tyre set: {sm.Graphics.penalty.name} | "
-                f"Static: Max RPM: {sm.Static.max_rpm}")
+        fuel = FuelMonitor.update_fuel  
+        
+        logging.info(f"Fuel Load: {fuel}")
+        # Add more telemetry data as needed
 
 def monitor_data(sm):
-    # Monitoring pad life
-    if sm.Physics.pad_life.FL < 10:
-        print("Graphical Alert: Front Left Pad life below 10")
-        # Here, you could also use a GUI library to display this alert graphically.
+    
+
+    # Simulate updating fuel level from shared memory
+    # Replace this with sm.Physics.fuel when integrating with your existing code
+    fuel = sm.Physics.fuel
+
+    app.update_fuel(fuel)
+    
 
 class accSharedMemory():
 
@@ -1072,29 +1109,33 @@ class accSharedMemory():
         else:
             raise SharedMemoryTimeout("No data available to read")
 
+
     def close(self) -> None:
         print("[ASM_Reader]: Closing memory maps.")
         self.physicSM.close()
         self.graphicSM.close()
         self.staticSM.close()
 
+root = tk.Tk()
+app = FuelMonitor(root)
+
 def simple_test() -> None:
 
     asm = accSharedMemory()
+    app = FuelMonitor(root)
     #with accSharedMemory() as asm:
     for i in range(1000):
         sm = asm.read_shared_memory_with_retry()
+        fuel = sm.Physics.fuel.real
             
-        if sm is not None:
-            
+        if fuel is not None:
+            monitor_data(fuel)
             #log_thread = threading.Thread(target=log_data, args=(sm,))
-            monitor_thread = threading.Thread(target=monitor_data, args=(sm,))
+            #monitor_thread = threading.Thread(target=monitor_data, args=(sm,))
             
             #log_thread.start()
-            monitor_thread.start()
-        
-            print("Physics:")
-            print(f"Pad life: {sm.Physics.pad_life}")
+            #monitor_thread.start()
+            time.sleep(1)  # Wait for 1 second  
             #logger.info(f"Physics: Pad life: {sm.Physics.pad_life} | ")
 
             print("Graphics:")
@@ -1104,7 +1145,7 @@ def simple_test() -> None:
             print("Static: ")
             print(f"Max RPM: {sm.Static.max_rpm}")
             #logger.info(f"Static: Max RPM: {sm.Static.max_rpm}")            
-
+            #root.mainloop()
     asm.close()
 
 if __name__ == "__main__":
